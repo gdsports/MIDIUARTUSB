@@ -31,6 +31,24 @@ $ sendmidi dev arduino file receivemidi.txt
 Compare the output of receivemidi (redirect output to a file) with the
 receivemidi.txt test script.
 
+## Hardware
+
+All of the following run MIDIUARTUSB.
+
+Arduino Leonardo (32u4) with SparkFun MIDI shield. The buttons and pots are not
+used in this program.
+
+![Arudino Leonardo with SparkFun MIDI shield](https://github.com/gdsports/MIDIUARTUSB/blob/master/images/leonardo_midi.jpg)
+
+Pro Micro (32u4) 5V with MIDI breakout board.
+
+![Pro Micro 5V with MIDI breakout board](https://github.com/gdsports/MIDIUARTUSB/blob/master/images/promicro_midi.jpg)
+
+Adafruit Trinket M0 (SAMD21) 3.3V with MIDI breakout board. Note the different
+resistor values on the MIDI board for 3.3V operation.
+
+![Trinket M0 3.3V with MIDI breakout board](https://github.com/gdsports/MIDIUARTUSB/blob/master/images/trinketm0_midi.jpg)
+
 ## References
 
 https://www.midi.org/specifications/
