@@ -35,6 +35,12 @@ SOFTWARE.
 // 1 turns on debug, 0 off
 #define DBGSERIAL if (0) SERIAL_PORT_MONITOR
 
+#ifdef USBCON
+#define MIDI_SERIAL_PORT Serial1
+#else
+#define MIDI_SERIAL_PORT Serial
+#endif
+
 struct MySettings : public midi::DefaultSettings
 {
     static const bool Use1ByteParsing = false;
@@ -42,7 +48,7 @@ struct MySettings : public midi::DefaultSettings
     static const long BaudRate = 31250;
 };
 
-MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, Serial1, MIDI, MySettings);
+MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, MIDI_SERIAL_PORT, MIDI, MySettings);
 
 void USBSystemExclusive(unsigned size, byte *data, bool markersIncluded) {
   uint8_t bytesOut;
@@ -74,6 +80,15 @@ void USBSystemExclusive(unsigned size, byte *data, bool markersIncluded) {
   }
 }
 
+inline uint8_t writeUARTwait(uint8_t *p, uint16_t size)
+{
+// Apparently, not needed. write blocks, if needed
+//  while (MIDI_SERIAL_PORT.availableForWrite() < size) {
+//    delay(1);
+//  }
+  return MIDI_SERIAL_PORT.write(p, size);
+}
+
 void setup() {
   DBGSERIAL.begin(115200);
 
@@ -81,7 +96,7 @@ void setup() {
   MIDI.turnThruOff();
 }
 
-uint32_t sysexSize = 0;
+uint16_t sysexSize = 0;
 
 void loop()
 {
@@ -155,66 +170,58 @@ void loop()
   /* MIDI USB -> MIDI UART */
   midiEventPacket_t rx = MidiUSB.read();
   if (rx.header != 0) {
-    midi::Channel channel = (rx.byte1 & 0x0F) + 1;
-    midi::MidiType midiType = (midi::MidiType)(rx.byte1 & 0xF0);
+    DBGSERIAL.print(rx.header, HEX);
+    DBGSERIAL.print(' ');
+    DBGSERIAL.print(rx.byte1, HEX);
+    DBGSERIAL.print(' ');
+    DBGSERIAL.print(rx.byte2, HEX);
+    DBGSERIAL.print(' ');
+    DBGSERIAL.println(rx.byte3, HEX);
     switch (rx.header & 0x0F) {
       case 0x00:  // Misc. Reserved for future extensions.
         break;
       case 0x01:  // Cable events. Reserved for future expansion.
         break;
       case 0x02:  // Two-byte System Common messages
-        switch (rx.byte1) {
-          case midi::SongSelect:
-            MIDI.sendSongSelect(rx.byte2);
-            break;
-          case midi::TimeCodeQuarterFrame:
-            MIDI.sendTimeCodeQuarterFrame(rx.byte2);
-            break;
-          default:
-            break;
-        }
+      case 0x0C:  // Program Change
+      case 0x0D:  // Channel Pressure
+        writeUARTwait(&rx.byte1, 2);
         break;
       case 0x03:  // Three-byte System Common messages
-        if (rx.byte1 == midi::SongPosition) {
-          MIDI.sendSongPosition(rx.byte2 | ((unsigned) rx.byte3 << 7));
-        }
+      case 0x08:  // Note-off
+      case 0x09:  // Note-on
+      case 0x0A:  // Poly-KeyPress
+      case 0x0B:  // Control Change
+      case 0x0E:  // PitchBend Change
+        writeUARTwait(&rx.byte1, 3);
         break;
       case 0x04:  // SysEx starts or continues
         sysexSize += 3;
-        MIDI.sendSysEx(3, &rx.byte1, true);
+        writeUARTwait(&rx.byte1, 3);
         break;
       case 0x05:  // Single-byte System Common Message or SysEx ends with the following single byte
         sysexSize += 1;
         DBGSERIAL.print("sysexSize=");
         DBGSERIAL.println(sysexSize);
         sysexSize = 0;
-        MIDI.sendSysEx(1, &rx.byte1, true);
+        writeUARTwait(&rx.byte1, 1);
         break;
       case 0x06:  // SysEx ends with the following two bytes
         sysexSize += 2;
         DBGSERIAL.print("sysexSize=");
         DBGSERIAL.println(sysexSize);
         sysexSize = 0;
-        MIDI.sendSysEx(2, &rx.byte1, true);
+        writeUARTwait(&rx.byte1, 2);
         break;
       case 0x07:  // SysEx ends with the following three bytes
         sysexSize += 3;
         DBGSERIAL.print("sysexSize=");
         DBGSERIAL.println(sysexSize);
         sysexSize = 0;
-        MIDI.sendSysEx(3, &rx.byte1, true);
-        break;
-      case 0x08:  // Note-off
-      case 0x09:  // Note-on
-      case 0x0A:  // Poly-KeyPress
-      case 0x0B:  // Control Change
-      case 0x0C:  // Program Change
-      case 0x0D:  // Channel Pressure
-      case 0x0E:  // PitchBend Change
-        MIDI.send(midiType, rx.byte2, rx.byte3, channel);
+        writeUARTwait(&rx.byte1, 3);
         break;
       case 0x0F:  // Single Byte, TuneRequest, Clock, Start, Continue, Stop, etc.
-        MIDI.sendRealTime((midi::MidiType)rx.byte1);
+        writeUARTwait(&rx.byte1, 1);
         break;
     }
   }
