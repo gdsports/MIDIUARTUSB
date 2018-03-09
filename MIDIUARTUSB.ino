@@ -1,25 +1,25 @@
 /*
-MIT License
+  MIT License
 
-Copyright (c) 2018 gdsports625@gmail.com
+  Copyright (c) 2018 gdsports625@gmail.com
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
 */
 
 /*
@@ -43,12 +43,12 @@ SOFTWARE.
 
 struct MySettings : public midi::DefaultSettings
 {
-    static const bool Use1ByteParsing = false;
-    static const unsigned SysExMaxSize = 1026; // Accept SysEx messages up to 1024 bytes long.
-    static const long BaudRate = 31250;
+  static const bool Use1ByteParsing = false;
+  static const unsigned SysExMaxSize = 1026; // Accept SysEx messages up to 1024 bytes long.
+  static const long BaudRate = 31250;
 };
 
-MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, MIDI_SERIAL_PORT, MIDI, MySettings);
+MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, MIDI_SERIAL_PORT, MIDIUART, MySettings);
 
 void USBSystemExclusive(unsigned size, byte *data, bool markersIncluded) {
   uint8_t bytesOut;
@@ -82,32 +82,42 @@ void USBSystemExclusive(unsigned size, byte *data, bool markersIncluded) {
 
 inline uint8_t writeUARTwait(uint8_t *p, uint16_t size)
 {
-// Apparently, not needed. write blocks, if needed
-//  while (MIDI_SERIAL_PORT.availableForWrite() < size) {
-//    delay(1);
-//  }
+  // Apparently, not needed. write blocks, if needed
+  //  while (MIDI_SERIAL_PORT.availableForWrite() < size) {
+  //    delay(1);
+  //  }
   return MIDI_SERIAL_PORT.write(p, size);
-}
-
-void setup() {
-  DBGSERIAL.begin(115200);
-
-  MIDI.begin(MIDI_CHANNEL_OMNI);
-  MIDI.turnThruOff();
 }
 
 uint16_t sysexSize = 0;
 
+void sysex_end(uint8_t i)
+{
+  sysexSize += i;
+  DBGSERIAL.print(F("sysexSize="));
+  DBGSERIAL.println(sysexSize);
+  sysexSize = 0;
+}
+
+
+void setup() {
+  DBGSERIAL.begin(115200);
+
+  MIDIUART.begin(MIDI_CHANNEL_OMNI);
+  MIDIUART.turnThruOff();
+}
+
 void loop()
 {
   /* MIDI UART -> MIDI USB */
-  if (MIDI.read()) {
-    midi::MidiType msgType = MIDI.getType();
+  if (MIDIUART.read()) {
+    midi::MidiType msgType = MIDIUART.getType();
+    DBGSERIAL.print(F("UART "));
     DBGSERIAL.print(msgType, HEX);
     DBGSERIAL.print(' ');
-    DBGSERIAL.print(MIDI.getData1(), HEX);
+    DBGSERIAL.print(MIDIUART.getData1(), HEX);
     DBGSERIAL.print(' ');
-    DBGSERIAL.println(MIDI.getData2(), HEX);
+    DBGSERIAL.println(MIDIUART.getData2(), HEX);
     switch (msgType) {
       case midi::InvalidType:
         break;
@@ -120,18 +130,18 @@ void loop()
       case midi::PitchBend:
         {
           midiEventPacket_t tx = {
-            (byte)(msgType>>4),
-            (byte)((msgType & 0xF0) | ((MIDI.getChannel()-1) & 0x0F)), /* getChannel() returns values from 1 to 16 */
-            MIDI.getData1(),
-            MIDI.getData2()
+            (byte)(msgType >> 4),
+            (byte)((msgType & 0xF0) | ((MIDIUART.getChannel() - 1) & 0x0F)), /* getChannel() returns values from 1 to 16 */
+            MIDIUART.getData1(),
+            MIDIUART.getData2()
           };
           MidiUSB.sendMIDI(tx);
           MidiUSB.flush();
           break;
         }
       case midi::SystemExclusive:
-        USBSystemExclusive(MIDI.getSysExArrayLength(),
-            (byte *)MIDI.getSysExArray(), true);
+        USBSystemExclusive(MIDIUART.getSysExArrayLength(),
+                           (byte *)MIDIUART.getSysExArray(), true);
         MidiUSB.flush();
         break;
       case midi::TuneRequest:
@@ -150,14 +160,14 @@ void loop()
       case midi::TimeCodeQuarterFrame:
       case midi::SongSelect:
         {
-          midiEventPacket_t tx = { 0x02, (byte)(msgType), MIDI.getData1(), 0 };
+          midiEventPacket_t tx = { 0x02, (byte)(msgType), MIDIUART.getData1(), 0 };
           MidiUSB.sendMIDI(tx);
           MidiUSB.flush();
           break;
         }
       case midi::SongPosition:
         {
-          midiEventPacket_t tx = { 0x03, (byte)(msgType), MIDI.getData1(), MIDI.getData2() };
+          midiEventPacket_t tx = { 0x03, (byte)(msgType), MIDIUART.getData1(), MIDIUART.getData2() };
           MidiUSB.sendMIDI(tx);
           MidiUSB.flush();
           break;
@@ -170,6 +180,7 @@ void loop()
   /* MIDI USB -> MIDI UART */
   midiEventPacket_t rx = MidiUSB.read();
   if (rx.header != 0) {
+    DBGSERIAL.print(F("USB "));
     DBGSERIAL.print(rx.header, HEX);
     DBGSERIAL.print(' ');
     DBGSERIAL.print(rx.byte1, HEX);
@@ -200,24 +211,15 @@ void loop()
         writeUARTwait(&rx.byte1, 3);
         break;
       case 0x05:  // Single-byte System Common Message or SysEx ends with the following single byte
-        sysexSize += 1;
-        DBGSERIAL.print("sysexSize=");
-        DBGSERIAL.println(sysexSize);
-        sysexSize = 0;
+        sysex_end(1);
         writeUARTwait(&rx.byte1, 1);
         break;
       case 0x06:  // SysEx ends with the following two bytes
-        sysexSize += 2;
-        DBGSERIAL.print("sysexSize=");
-        DBGSERIAL.println(sysexSize);
-        sysexSize = 0;
+        sysex_end(2);
         writeUARTwait(&rx.byte1, 2);
         break;
       case 0x07:  // SysEx ends with the following three bytes
-        sysexSize += 3;
-        DBGSERIAL.print("sysexSize=");
-        DBGSERIAL.println(sysexSize);
-        sysexSize = 0;
+        sysex_end(3);
         writeUARTwait(&rx.byte1, 3);
         break;
       case 0x0F:  // Single Byte, TuneRequest, Clock, Start, Continue, Stop, etc.
