@@ -32,6 +32,12 @@
 #include <MIDI.h>
 #include <MIDIUSB.h>
 
+// setup Dotstar LED on Trinket M0
+#include <Adafruit_DotStar.h>
+#define DATAPIN    7
+#define CLOCKPIN   8
+Adafruit_DotStar strip = Adafruit_DotStar(1, DATAPIN, CLOCKPIN, DOTSTAR_BRG);
+
 // 1 turns on debug, 0 off
 #define DBGSERIAL if (0) SERIAL_PORT_MONITOR
 
@@ -99,12 +105,32 @@ void sysex_end(uint8_t i)
   sysexSize = 0;
 }
 
+const uint8_t MIDI_passthru_pin=2;
+bool MIDI_passthru;
 
 void setup() {
+  // Turn off built-in RED LED
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, LOW);
+  // Turn off built-in Dotstar RGB LED
+  strip.begin();
+  strip.clear();
+  strip.show();
+
   DBGSERIAL.begin(115200);
 
+  // Pin 0 LOW selects MIDI pass through on
+  pinMode(MIDI_passthru_pin, INPUT_PULLUP);
+  MIDI_passthru = (digitalRead(MIDI_passthru_pin) == LOW);
+
   MIDIUART.begin(MIDI_CHANNEL_OMNI);
-  MIDIUART.turnThruOff();
+  if (MIDI_passthru) {
+    DBGSERIAL.println("MIDI thru on");
+  }
+  else {
+    DBGSERIAL.println("MIDI thru off");
+    MIDIUART.turnThruOff();
+  }
 }
 
 void loop()
@@ -142,6 +168,8 @@ void loop()
       case midi::SystemExclusive:
         USBSystemExclusive(MIDIUART.getSysExArrayLength(),
                            (byte *)MIDIUART.getSysExArray(), true);
+        DBGSERIAL.print("sysex size ");
+        DBGSERIAL.println(MIDIUART.getSysExArrayLength());
         MidiUSB.flush();
         break;
       case midi::TuneRequest:

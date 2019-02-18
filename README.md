@@ -49,6 +49,22 @@ resistor values on the MIDI board for 3.3V operation.
 
 ![Trinket M0 3.3V with MIDI breakout board](https://github.com/gdsports/MIDIUARTUSB/blob/master/images/trinketm0_midi.jpg)
 
+## Options
+
+Ground pin 2 to enable MIDI pass thru.
+
+## Trinket M0 firmware
+
+Compiled programs can be burned into the Trinket M0 just by dragging and
+dropping a UF2 file on to the Trinket M0 USB drive. There is no need to install
+the Arduino IDE, source code, or USB serial device driver.
+
+* Download the UF2 file.
+* Plug in the Trinket M0 to the computer.
+* Double tap the Trinket M0 reset button.
+* When the TRINKETBOOT USB drive appears, drop the UF2 file on to the drive.
+* Wait until the Trinket M0 reboots.
+
 ## References
 
 https://www.midi.org/specifications/
